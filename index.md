@@ -4,6 +4,71 @@ This is a summary of the current components for the Robocup@Home Robot and some 
 
 ## Robocup@Home tasks (Pseudocode)
 
+### Reception
+
+#### Setup
+
+``````python
+nav.map_room('frontier exploration')
+nav.name_locations(['initial', 'front door', 'living room', ['seat1', 'seat2', ...]])
+``````
+
+#### Initialization
+
+```python
+robot.mem['host']['face-encode'] = vis.face(image_of_host.png)
+robot.mem['host']['name'] = nlp.analyse(nlp.stt, find='name')
+robot.mem['host']['drink'] = nlp.analyse(nlp.stt, find='drink')
+ros.call(nav.named_location.srv("SAVE host's seat")) # where host is sitting
+# navigate to above location using teleop with map server running
+vis.launch(vis.objection_detection.pub(['person', 'chair']))
+```
+
+#### Main
+
+```py
+class Robot():
+	speech_buffer = CircularBuffer()
+    person_location = Location()
+    chair_location = Location()
+    
+    def __init__(self):
+        speech_sub = subscribe(nlp.speech_to_text.topic, callback=self.save_speech)
+        person_sub = subscribe(vis.objection_detection.topic, callback=self.update_obj_loc)
+        self.map = nav.load_map(nav.named_locations)
+        
+    def save_speech(self, msg):
+        self.speech_buffer.append(msg)
+        
+    def update_obj_loc(self, msg):
+        self.person_location = msg.person_location # Do we need to handle multiple people?
+        self.chair_location = msg.chair_location
+    
+    def guest_reception(self, guest):
+    	slam.wait_for_guest()
+        ros.call(nav.slam.goto(loc=self.person_location))
+        nlp.story(['welcome', 'gather info about guest'])
+        image = ros.wait_for_message(camera_topic)
+        self.mem[person]['face-encode'] = vis.face(image)
+        self.mem[person]['name'] = nlp.analyse(nlp.stt, find='name')
+        self.mem[person]['drink'] = nlp.analyse(nlp.stt, find='drink')
+        for feature, description in vis.person_features(image):
+        	self.mem[person][feature] = description
+		nlp.tts("Follow me")
+        ros.call(nav.named_location.srv, "GOTO living room")
+        
+    def main(self):
+        ##### Optional
+        arm.open_door_squence() # Not sure How this would look
+        #####
+        nav.self_localize()
+        ros.call(nav.named_location.srv, 'GOTO front door')
+        self.guest_reception('guest1')
+        nlp.story(['introduce guest to host'])(self.mem['guest1'])
+        self.guest_reception('guest2')
+        nlp.story(['introduce guest to host'])(self.mem['guest2'])
+```
+
 ### Carry My Luggage
 
 #### Setup
